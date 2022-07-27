@@ -2,12 +2,15 @@
 pragma solidity 0.8.15;
 
 import "./IERC20.sol";
+import "./PriceOracle.sol";
+
 
 contract Core {
     
     /* ========== CONSTANT VARIABLES ========== */
 
     address public BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
+    AggregatorV3Interface internal priceFeed;
 
     /* ========== STATE VARIABLES ========== */
     
@@ -27,6 +30,7 @@ contract Core {
     /* ========== CONSTRUCTOR ========== */
 
     constructor(address _BUSD) {
+        priceFeed = AggregatorV3Interface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE);
         exchangeRate = 1e18; // 1.00
         lastUpdated = block.timestamp;
         BUSD = _BUSD;
@@ -94,7 +98,7 @@ contract Core {
         isLeveraged[msg.sender] = true;
 
         // calculate BUSD amount
-        uint BorrowedBUSDAMount = 2 * _amount * (getPriceOfBNB() / 1e8);
+        uint BorrowedBUSDAMount = 2 * _amount * (getLatestPrice() / 1e8);
         
         // trade BUSD with BNB
         trade(BorrowedBUSDAMount);
@@ -108,6 +112,35 @@ contract Core {
 
         // update leveraged amount of user
         totalLeveragedAmountByUser[msg.sender] += _amount * 3;
+
+        // update lended amount, borrowed amount, and utilization
+        updateLendedAmountBorrowedAmountAndUtilization();
+    }
+
+    function closePosition() public {
+        // update exchange rate
+        updateExchangeRate();
+
+        // check if user is using leveraging 
+        require(isLeveraged[msg.sender] == true);
+
+        // kick him from leveraging
+        isLeveraged[msg.sender] = false;
+
+        // calculate the profit that will be sent to the user
+        uint profit = (totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8) - (borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18;
+        
+        // set his position as 0
+        totalLeveragedAmountByUser[msg.sender] = 0;
+
+        // decrease total borrowing 
+        totalhAmountBorrow -= borrowedhAmountByUser[msg.sender];
+
+        // set his debt to 0
+        borrowedhAmountByUser[msg.sender] = 0;
+
+        // send his profit
+        IERC20(BUSD).transfer(msg.sender, profit);
 
         // update lended amount, borrowed amount, and utilization
         updateLendedAmountBorrowedAmountAndUtilization();
@@ -135,8 +168,16 @@ contract Core {
 
     }
 
-    function getPriceOfBNB() public pure returns (uint) {
-        return 300 * 1e8;
+    function getLatestPrice() public view returns (uint) {
+        (
+            uint80 roundID,
+            int price,
+            uint startedAt,
+            uint timeStamp,
+            uint80 answeredInRount
+        ) = priceFeed.latestRoundData();
+        // For ETH / USD price is scaled up by 1e8
+        return uint(price);
     }
 
     function sendBNB() public payable {}
