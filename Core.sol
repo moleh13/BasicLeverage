@@ -29,8 +29,8 @@ contract Core {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(address _BUSD) {
-        priceFeed = AggregatorV3Interface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE);
+    constructor(address _BUSD, address _priceFeed) {
+        priceFeed = AggregatorV3Interface(_priceFeed);
         exchangeRate = 1e18; // 1.00
         lastUpdated = block.timestamp;
         BUSD = _BUSD;
