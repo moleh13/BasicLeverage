@@ -22,6 +22,7 @@ contract Core {
     mapping(address => bool) public isLeveraged;
     mapping(address => uint) public hAmountByUser;
     mapping(address => uint) public borrowedhAmountByUser;
+    mapping(address => uint) public totalLeveragedAmountByUser;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -80,6 +81,41 @@ contract Core {
         // update utilization after withdrawing
         utilization = (borrowedAmount / lendedAmount) * 1e18;       
     }
+    /* ========== LEVERAGER ========== */
+
+    function openPosition(uint _amount) public payable {
+        // update exchange rate
+        updateExchangeRate();
+
+        // check if he sends correct msg.value amount
+        require(msg.value == _amount, "You have to send BNB as amount you have entered");
+
+        // update statement of the user
+        isLeveraged[msg.sender] = true;
+
+        // calculate BUSD amount
+        uint BorrowedBUSDAMount = 2 * _amount * (getPriceOfBNB() / 1e8);
+        
+        // trade BUSD with BNB
+        trade(BorrowedBUSDAMount);
+
+        // increase borrowed hAmount
+        uint hAmount = (BorrowedBUSDAMount * 1e18) / exchangeRate;
+        totalhAmountBorrow += hAmount;
+
+        // increase borrowed hAmount of user
+        borrowedhAmountByUser[msg.sender] += hAmount;
+
+        // update leveraged amount of user
+        totalLeveragedAmountByUser[msg.sender] += _amount * 3;
+
+        // update lended amount, borrowed amount, and utilization
+        updateLendedAmountBorrowedAmountAndUtilization();
+    }
+
+
+
+    /* ========== HELPERS ========== */
 
     function updateExchangeRate() public {
         uint interestRate = utilization;
@@ -88,4 +124,20 @@ contract Core {
         lastUpdated = block.timestamp;
         exchangeRate += interestRatePerSecond * passedTimed;
     }
+
+    function updateLendedAmountBorrowedAmountAndUtilization() public {
+        lendedAmount = (totalhAmountLend * exchangeRate) / 1e18;
+        borrowedAmount = (totalhAmountBorrow * exchangeRate) / 1e18;
+        utilization = (borrowedAmount * 1e18) / lendedAmount ;
+    }
+
+    function trade(uint _amount) public {
+
+    }
+
+    function getPriceOfBNB() public pure returns (uint) {
+        return 300 * 1e8;
+    }
+
+    function sendBNB() public payable {}
 }
