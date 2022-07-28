@@ -21,6 +21,7 @@ contract Core {
     uint public lastUpdated;
     uint public totalhAmountLend;
     uint public totalhAmountBorrow;
+    uint public BNBPrice;
 
     mapping(address => bool) public isLeveraged;
     mapping(address => uint) public hAmountByUser;
@@ -52,12 +53,8 @@ contract Core {
         // increase total hAmount
         totalhAmountLend += hAmount;
 
-        // update lended / borrowed amount
-        lendedAmount = (totalhAmountLend * exchangeRate) / 1e18;
-        borrowedAmount = (totalhAmountBorrow * exchangeRate) / 1e18;
-
-        // update utilization after lending
-        utilization = (borrowedAmount / lendedAmount) * 1e18;
+        // update lended amount, borrowed amount, and utilization
+        updateLendedAmountBorrowedAmountAndUtilization();
     }
 
     function withdraw(uint _amount) public {
@@ -78,12 +75,9 @@ contract Core {
         // decrease total hAmount
         totalhAmountLend -= hAmount;
 
-        // update lended / borrowed amount
-        lendedAmount = (totalhAmountLend * exchangeRate) / 1e18;
-        borrowedAmount = (totalhAmountBorrow * exchangeRate) / 1e18;
-
-        // update utilization after withdrawing
-        utilization = (borrowedAmount / lendedAmount) * 1e18;       
+        // update lended amount, borrowed amount, and utilization
+        updateLendedAmountBorrowedAmountAndUtilization();    
+ 
     }
     /* ========== LEVERAGER ========== */
 
@@ -128,7 +122,8 @@ contract Core {
         isLeveraged[msg.sender] = false;
 
         // calculate the profit that will be sent to the user
-        uint profit = (totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8) - (borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18;
+
+        uint profit = calculateProfit();
         
         // set his position as 0
         totalLeveragedAmountByUser[msg.sender] = 0;
@@ -168,8 +163,20 @@ contract Core {
 
     }
 
+    function calculateProfit() public view returns (uint) {
+        int profit = int((totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8)) - int((borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18);
+        uint profitNew = 0;
+        if (profit > 0) {
+            profitNew = ((totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8)) - ((borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18);
+        } else {
+            profitNew = ((borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18) - ((totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8));
+        }
+
+        return profitNew;
+    }
+
     function getLatestPrice() public view returns (uint) {
-        (
+        /*(
             uint80 roundID,
             int price,
             uint startedAt,
@@ -178,6 +185,12 @@ contract Core {
         ) = priceFeed.latestRoundData();
         // For ETH / USD price is scaled up by 1e8
         return uint(price);
+        */
+        return BNBPrice;
+    }
+
+    function setPriceOfBNB(uint _price) public {
+        BNBPrice = _price * 1e8;
     }
 
     function sendBNB() public payable {}
