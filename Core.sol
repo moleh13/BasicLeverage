@@ -111,7 +111,7 @@ contract Core {
         updateLendedAmountBorrowedAmountAndUtilization();
     }
 
-    function closePosition() public {
+    function closePosition() public payable {
         // update exchange rate
         updateExchangeRate();
 
@@ -121,9 +121,8 @@ contract Core {
         // kick him from leveraging
         isLeveraged[msg.sender] = false;
 
-        // calculate the profit that will be sent to the user
-
-        uint profit = calculateProfit();
+        // calculate remaining
+        uint remainingBNB = calculateRemainingPrinciple();
         
         // set his position as 0
         totalLeveragedAmountByUser[msg.sender] = 0;
@@ -134,8 +133,9 @@ contract Core {
         // set his debt to 0
         borrowedhAmountByUser[msg.sender] = 0;
 
-        // send his profit
-        IERC20(BUSD).transfer(msg.sender, profit);
+        // send his BNB
+        bool sent = payable(msg.sender).send(remainingBNB);
+        require(sent, "Failed to send BNB");
 
         // update lended amount, borrowed amount, and utilization
         updateLendedAmountBorrowedAmountAndUtilization();
@@ -163,16 +163,11 @@ contract Core {
 
     }
 
-    function calculateProfit() public view returns (uint) {
-        int profit = int((totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8)) - int((borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18);
-        uint profitNew = 0;
-        if (profit > 0) {
-            profitNew = ((totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8)) - ((borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18);
-        } else {
-            profitNew = ((borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18) - ((totalLeveragedAmountByUser[msg.sender] * 2) / 3 * (getLatestPrice() / 1e8));
-        }
-
-        return profitNew;
+    function calculateRemainingPrinciple() public view returns (uint) {
+        uint debt = (borrowedhAmountByUser[msg.sender] * exchangeRate) / 1e18;
+        uint position = totalLeveragedAmountByUser[msg.sender] * (BNBPrice / 1e8);
+        uint BNBAmount = (position - debt) / (BNBPrice / 1e8);
+        return BNBAmount;
     }
 
     function getLatestPrice() public view returns (uint) {
