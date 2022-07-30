@@ -141,6 +141,37 @@ contract Core {
         updateLendedAmountBorrowedAmountAndUtilization();
     }
 
+    /* ========== LIQUIDATION ========== */
+
+    function liquidate(address _victim) public {
+        // check if the victim is leveraged
+        require(isLeveraged[_victim] == true);
+
+        // check if the victim can be liquidated
+        uint _borrowedAmount = (borrowedhAmountByUser[_victim] * exchangeRate) / 1e18;
+        uint position = totalLeveragedAmountByUser[_victim] * (BNBPrice / 1e8);
+        uint ratio = (_borrowedAmount * 1e18 / position);
+        require(ratio >= 9 * 1e17);
+
+        // calculate remaining USD amount of the victim
+        uint remainingPrinciple = position - _borrowedAmount;
+
+        // set his leverage as 0
+        totalLeveragedAmountByUser[_victim] = 0;
+
+        // decrease total borrowed amount
+        totalhAmountBorrow -= borrowedhAmountByUser[_victim];
+
+        // set his borrowed amount as 0
+        borrowedhAmountByUser[_victim] = 0;
+
+        // kick him from leveraging
+        isLeveraged[_victim] = false;
+
+        // send remaining BUSD to his address
+        IERC20(BUSD).transfer(_victim, remainingPrinciple);
+    }
+
 
 
     /* ========== HELPERS ========== */
